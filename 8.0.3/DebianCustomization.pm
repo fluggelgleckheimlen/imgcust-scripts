@@ -118,6 +118,10 @@ sub CustomizeHostName
 
       # run hostname command to refresh the hostname for this session
       Utils::ExecuteCommand("hostname $hostName");
+
+      # Reconfigure SSH
+      Utils::ExecuteCommand("rm -rf /etc/ssh/ssh_host_*");
+      Utils::ExecuteCommand("dpkg-reconfigure --frontend noninteractive openssh-server 2>/dev/null");
    }
 };
 
