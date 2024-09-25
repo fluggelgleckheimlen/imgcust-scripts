@@ -21,6 +21,7 @@ our $ROCKY = "Rocky Linux";
 our $ALMA = "Alma Linux";
 our $KYLINAS = "Kylin Linux Advanced Server";
 our $MIRACLE = "Miracle Linux";
+our $REDOS = "RED OS";
 our $isRelease86 = 0;
 
 sub DetectDistro
@@ -116,6 +117,11 @@ sub FindOsId
                $isRelease86 = 1;
             }
          }
+      }
+   } elsif ($content =~ /RED.*OS.*release.*?(\d{1,2})/i) {
+      # Enable RED OS customization
+      if ($1 == 7 || $1 == 8) {
+         $result = $REDOS . " $1";
       }
    }
    return $result;
