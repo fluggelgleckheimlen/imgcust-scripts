@@ -407,6 +407,7 @@ sub CustomizeSpecificNIC
    if ($bootproto =~ /dhcp/i) {
       # check if netplan installed support dnsdhcp override
       AppendYaml($self->{_netplan}, 3, "dhcp4: yes");
+      AppendYaml($self->{_netplan}, 3, "dhcp-identifier: mac");
       if ($self->{_netplanSupportDnsFromDhcp}) {
          DEBUG("netplan.io support DNSFROMDHCP, setting dns ipv4 override...");
          AppendYaml($self->{_netplan}, 3, "dhcp4-overrides:");
