@@ -1,8 +1,9 @@
 #!/usr/bin/perl
 
 ################################################################################
-#  Copyright (c) 2010-2019, 2023 VMware, Inc.  All rights reserved.
-#  -- VMware Confidential
+#  Copyright (c) 2010-2024 Broadcom. All Rights Reserved.
+#  Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
+#  and/or its subsidiaries.
 ################################################################################
 
 package RHEL6Customization;
@@ -42,13 +43,14 @@ sub CustomizeNetwork
 {
    my ($self) = @_;
 
-   RemoveOldIFCfgFiles();
+   $self->RemoveOldIFCfgFiles();
 
    $self->SUPER::CustomizeNetwork();
 }
 
 sub RemoveOldIFCfgFiles
 {
+   my ($self) = @_;
    # If there is an ifcfg-ethX file with NM_CONTROLLED=no, NM will ignore
    # the rest of the ifcfg-ethX files and instead create "Auth ethX" profiles.
    INFO("Removing old interface configuration files.");

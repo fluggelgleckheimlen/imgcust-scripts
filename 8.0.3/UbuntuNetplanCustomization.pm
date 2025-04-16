@@ -449,12 +449,16 @@ sub CustomizeSpecificNIC
          AppendYaml($self->{_netplan}, 4, "- " . $addr);
       }
    }
-
+   # The flag hasNetplanRoutes is used to indicate if the $nic 'routes:' is
+   # added in netplan configuration file. AddRouteIPv6() will skip adding
+   # 'routes:' if the flag value is not '0' since AddRouteIPv4() already
+   # added it.
+   my $hasNetplanRoutes = 0;
    my @ipv4Gateways =
       split(/,/, $self->{_customizationConfig}->Lookup($nic . "|GATEWAY"));
 
    if (@ipv4Gateways) {
-      $self->AddRouteIPv4($interface, \@ipv4Gateways, $nic);
+      $self->AddRouteIPv4($interface, \@ipv4Gateways, $nic, \$hasNetplanRoutes);
    }
 
    my @ipv6Gateways =
@@ -462,7 +466,7 @@ sub CustomizeSpecificNIC
          $self->{_customizationConfig}->Query("^$nic(\\|IPv6GATEWAY\\|)"));
 
    if (@ipv6Gateways) {
-      $self->AddRouteIPv6($interface, \@ipv6Gateways);
+      $self->AddRouteIPv6($interface, \@ipv6Gateways, $hasNetplanRoutes);
    }
 
    # name servers
@@ -540,7 +544,7 @@ sub RestartNetwork
 
 sub AddRouteIPv4
 {
-   my ($self, $interface, $ipv4Gateways, $nic) = @_;
+   my ($self, $interface, $ipv4Gateways, $nic, $hasRoutes) = @_;
 
    my $primaryNic = $self->{_customizationConfig}->GetPrimaryNic();
    if (defined $primaryNic) {
@@ -559,6 +563,9 @@ sub AddRouteIPv4
              AppendYaml($self->{_netplan}, 3, "routes:");
              AppendYaml($self->{_netplan}, 4, "- to: default");
              AppendYaml($self->{_netplan}, 4, "  via: " . $primaryNicGw);
+             # set $hasNetplanRoutes '1' when add the routes into netplan
+             # configuration file.
+             $$hasRoutes = 1;
          } else {
              AppendYaml($self->{_netplan}, 3, "gateway4: " . $primaryNicGw);
          }
@@ -573,6 +580,7 @@ sub AddRouteIPv4
        AppendYaml($self->{_netplan}, 3, "routes:");
        AppendYaml($self->{_netplan}, 4, "- to: default");
        AppendYaml($self->{_netplan}, 4, "  via: " . $nonPrimaryNicGw);
+       $$hasRoutes = 1;
    } else {
        AppendYaml($self->{_netplan}, 3, "gateway4: " . $nonPrimaryNicGw);
    }
@@ -580,14 +588,17 @@ sub AddRouteIPv4
 
 sub AddRouteIPv6
 {
-   my ($self, $interface, $ipv6Gateways, $nic) = @_;
+   my ($self, $interface, $ipv6Gateways, $hasRoutes) = @_;
 
    INFO("Configuring ipv6 route (gateway settings) for $interface.");
    # netplan does not support multiple gateways
    # multiple gateways are problematic anyway and customers
    # should be advised to use a single gateway.
    if ($self->{_netplanSupportDefaultRouting}) {
-       AppendYaml($self->{_netplan}, 3, "routes:");
+       # add 'routes:' only when $hasNetplanRoutes is '0'
+       if ($hasRoutes == 0) {
+          AppendYaml($self->{_netplan}, 3, "routes:");
+       }
        AppendYaml($self->{_netplan}, 4, "- to: default");
        AppendYaml($self->{_netplan}, 4, "  via: " . @$ipv6Gateways[0]);
    } else {

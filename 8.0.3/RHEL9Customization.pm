@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 ###############################################################################
-#  Copyright (c) 2022-2024 Broadcom. All Rights Reserved.
+#  Copyright (c) 2022-2025 Broadcom. All Rights Reserved.
 #  Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
 #  and/or its subsidiaries.
 ###############################################################################
@@ -12,6 +12,8 @@ use base qw(RHEL7Customization);
 use strict;
 use Debug;
 
+# NetworkManager ifcfg-rh profile directory
+my $NMIFCFGRHPROFILEDIR = "/etc/sysconfig/network-scripts";
 # NetworkManager stores new network profiles in keyfile format in
 # the /etc/NetworkManager/system-connections directory
 my $NMKEYFILEPROFILEDIR = "/etc/NetworkManager/system-connections";
@@ -59,7 +61,7 @@ sub CustomizeNetwork
 {
    my ($self) = @_;
 
-   RemoveOldNMKeyfileProfiles();
+   $self->RemoveOldNMKeyfileProfiles();
 
    $self->SUPER::CustomizeNetwork();
 }
@@ -81,11 +83,37 @@ sub CustomizeNetwork
 
 sub RemoveOldNMKeyfileProfiles
 {
+   my ($self) = @_;
    # NetworkManager loads files under directory
    # /etc/NetworkManager/system-connections regardless of filename.
    INFO("Removing old NetworkManager network profiles in keyfile format");
    my $keyfileProfilePattern = $NMKEYFILEPROFILEDIR . "/*";
    Utils::DeleteFiles(glob($keyfileProfilePattern));
+}
+
+#...............................................................................
+#
+# RemoveOldIFCfgFiles
+#
+#   Delete old NetworkManager ifcfg-rh profiles under directory
+#   /etc/sysconfig/network-scripts
+#
+# Params:
+#   None.
+#
+# Result:
+#   None.
+#
+#...............................................................................
+
+sub RemoveOldIFCfgFiles
+{
+   my ($self) = @_;
+   if (-d $NMIFCFGRHPROFILEDIR) {
+      INFO("Removing old NetworkManager network ifcfg-rh profiles");
+      my $ifcfgrhProfilePattern = $NMIFCFGRHPROFILEDIR . "/ifcfg-*";
+      Utils::DeleteFiles(glob($ifcfgrhProfilePattern));
+   }
 }
 
 #...............................................................................
@@ -131,15 +159,9 @@ sub CustomizeSpecificNIC
 {
    my ($self, $nic) = @_;
 
-   # Write network configuration to NetworkManager keyfile profile
+   # Write network configuration only to NetworkManager keyfile profile
+   # ifcfg-rh profile is deprecated
    $self->WriteNMKeyfileProfile($nic);
-
-   # Besides keyfile profile, ifcfg-rh profile is still supported by
-   # NetworkManager for RHEL 9.x. In case some customers are using ifcfg-rh
-   # profile, we still write network configuration to network-scripts.
-   # RHEL has fully deprecated ifcfg-rh profile in RHEL 10.x, so we stop
-   # supporting it since RHEL 10.0.
-   $self->SUPER::CustomizeSpecificNIC($nic);
 }
 
 #...............................................................................
@@ -196,6 +218,20 @@ sub FormatNMKeyfileProfileContent
    my $primaryNic  = $self->{_customizationConfig}->GetPrimaryNic();
 
    my @content;
+
+   # PR 3439507, spread ipv4 and ipv6 name servers on corresponding ip section
+   my (@ipv4NameServers, @ipv6NameServers);
+   my $nameServers = $self->{_customizationConfig}->GetNameServers();
+   if ($nameServers && @$nameServers) {
+      foreach my $nameServer (@$nameServers) {
+         # The pattern is just to tell ipv4 name server from ipv6 name server
+         if ($nameServer =~ /^\d+\.\d+\.\d+\.\d+$/i) {
+            push(@ipv4NameServers, $nameServer);
+         } else {
+            push(@ipv6NameServers, $nameServer);
+         }
+      }
+   }
 
    # Format [connection] section
    push(@content, "\n[connection]\n");
@@ -262,13 +298,13 @@ sub FormatNMKeyfileProfileContent
          push(@content, "gateway=$gw4\n");
       }
    }
-   # [ipv4] name server and search domain
-   my $nameServers = $self->{_customizationConfig}->GetNameServers();
-   my $dnsSuffixes = $self->{_customizationConfig}->GetDNSSuffixes();
-   if ($nameServers && @$nameServers) {
-      my $dns = join(";", @$nameServers);
+   # [ipv4] name server
+   if (@ipv4NameServers) {
+      my $dns = join(";", @ipv4NameServers);
       push(@content, "dns=$dns\n");
    }
+   # [ipv4] search domain
+   my $dnsSuffixes = $self->{_customizationConfig}->GetDNSSuffixes();
    if ($dnsSuffixes && @$dnsSuffixes) {
       my $dnsSearch = join(";", @$dnsSuffixes);
       push(@content, "dns-search=$dnsSearch\n");
@@ -304,6 +340,12 @@ sub FormatNMKeyfileProfileContent
          push(@content, "gateway=$gw6\n");
       }
    }
+   # [ipv6] name server
+   if (@ipv6NameServers) {
+      my $dns = join(";", @ipv6NameServers);
+      push(@content, "dns=$dns\n");
+   }
+
    return @content;
 }
 
