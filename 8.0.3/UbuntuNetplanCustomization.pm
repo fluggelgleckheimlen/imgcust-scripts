@@ -1,5 +1,7 @@
 ################################################################################
-#  Copyright (c) 2018-2023 VMware, Inc.  All rights reserved.
+#  Copyright (c) 2018-2025 Broadcom. All Rights Reserved.
+#  Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
+#  and/or its subsidiaries.
 ################################################################################
 
 package UbuntuNetplanCustomization;
@@ -219,6 +221,7 @@ sub GetNetplanVer
 sub CustomizeNICS
 {
    my ($self) = @_;
+   my $ret;
 
    # get information on the NICS to configure
    my $nicsToConfigure = $self->{_customizationConfig}->Lookup("NIC-CONFIG|NICS");
@@ -282,8 +285,17 @@ sub CustomizeNICS
    # We need to restart the network explicitly because there is no deterministic
    # order about when the guest customization was run by the toolsd vs.
    # when the system loads the netplan setting and start the network.
+   # PR 3515316, apply netplan configurations with a timeout.
+   # TODO: If we want to remove reboot for Linux perl based customization, we
+   # need to take care of the case in PR 3515316 which is executing command
+   # 'netplan apply' hangs.
 
-   $self->RestartNetwork();
+   Utils::ExecuteTimedCommand('/usr/sbin/netplan apply 2>&1',
+                              $Customization::MAX_CMD_TIMEOUT,
+                              \$ret);
+   if ($ret) {
+      die "Failed to apply netplan settings, return code: $ret";
+   }
 }
 
 #...............................................................................

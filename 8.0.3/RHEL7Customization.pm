@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 ###############################################################################
-# Copyright (c) 2014-2024 Broadcom. All Rights Reserved.
+# Copyright (c) 2014-2025 Broadcom. All Rights Reserved.
 # Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
 # and/or its subsidiaries.
 ###############################################################################
@@ -266,6 +266,20 @@ sub RestartNetworkManager
          }
       }
    }
+}
+
+#...............................................................................
+# Bring up the customized Nics for the instant clone flavor of
+# guest customization. If the content of the hostname file does not match
+# the output value of the hostname command, set hostname to the content of
+# the hostname file accordingly.
+#...............................................................................
+sub InstantCloneNicsUp
+{
+   my ($self) = @_;
+
+   $self->SUPER::InstantCloneNicsUp();
+   $self->SetTransientHostname(HOSTNAME_FILE);
 }
 
 1;

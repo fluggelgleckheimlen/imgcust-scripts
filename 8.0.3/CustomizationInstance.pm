@@ -1,8 +1,9 @@
 #!/usr/bin/perl
 
 ################################################################################
-# Copyright (c) 2024 Broadcom.  All rights reserved.
-# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
+# Copyright (c) 2024-2025 Broadcom. All Rights Reserved.
+# Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
+# and/or its subsidiaries.
 ################################################################################
 
 #...............................................................................
@@ -37,6 +38,7 @@ use UbuntuCustomization qw();
 use SunOSCustomization qw();
 use SLES11Customization qw();
 use SLES12Customization qw();
+use SLES16Customization qw();
 use RHEL6Customization qw();
 use RHEL7Customization qw();
 use RHEL9Customization qw();
@@ -281,7 +283,7 @@ sub LoadCustomizationInstanceFromMethodId
    my ($goscMethodId) = @_;
 
    my $distroCustomization = undef;
-   if ($goscMethodId =~ /GOSC_METHOD_(\d{1,2})/i) {
+   if ($goscMethodId =~ /^GOSC_METHOD_(\d+)$/i) {
       my $id = $1;
       if ($id == 1) {       # GOSC_METHOD_1
          $distroCustomization = new RHEL7Customization();
@@ -306,6 +308,8 @@ sub LoadCustomizationInstanceFromMethodId
          $distroCustomization = new Ubuntu2310Customization();
       } elsif ($id == 10) { # GOSC_METHOD_10
          $distroCustomization = new RHEL10Customization();
+      } elsif ($id == 11) { # GOSC_METHOD_11
+         $distroCustomization = new SLES16Customization();
       # [NewDistroSupport] STEP2:
       # 1. Add new customization method here
       # 2. Update MAX_GOSC_METHOD_ID in //bora/vpx/vpxd/gosc/custSpecUtil.cpp
@@ -359,6 +363,7 @@ sub LoadCustomizationInstance
 
    if (not defined $distroCustomization) {
       my @customizations = (
+         new SLES16Customization(),
          new SLES12Customization(),
          new SLES11Customization(),
          new AmazonLinuxCustomization(),
@@ -428,6 +433,7 @@ sub LoadCustomizationInstanceForIc
 
    if (not defined $distroCustomization) {
       my @instantCloneCustomizations = (
+         new SLES16Customization(),
          new SLES12Customization(),
          new SLES11Customization(),
          new AmazonLinuxCustomization(),

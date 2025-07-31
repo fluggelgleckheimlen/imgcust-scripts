@@ -1,7 +1,9 @@
 #!/usr/bin/perl
 
 ################################################################################
-#  Copyright (c) 2015-2022 VMware, Inc.  All rights reserved.
+#  Copyright (c) 2015-2025 Broadcom. All Rights Reserved.
+#  Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
+#  and/or its subsidiaries.
 ################################################################################
 
 #...............................................................................
@@ -1958,6 +1960,50 @@ sub RenewMachineID
       INFO("New machine ID: $machineID");
    } else {
       INFO("$MACHINE_ID doesn't exist, skip renewing machine ID");
+   }
+}
+
+#..............................................................................
+#
+# SetTransientHostname
+#
+#     If the hostname file exists, compare the static hostname in the hostname
+#     file with the transient hostname obtained from the output of the hostname
+#     command. If they do not match, set the transient hostname to the static
+#     hostname.
+#
+#     Params:
+#         $self  This object.
+#         $hostnameFile The file that records static hostname.
+#
+#     Result:
+#         The transient hostname is the same as the static hostname in the
+#         file.
+#
+#..............................................................................
+
+sub SetTransientHostname
+{
+   my ($self, $hostnameFile) = @_;
+
+   if (-e $hostnameFile) {
+      my $hostnameFromFile = Utils::GetValueFromFile($hostnameFile,
+         '^(?!\s*#)([^\s.]+)');
+      chomp($hostnameFromFile);
+      Utils::Trim($hostnameFromFile);
+
+      my $hostnameFromCmd = Utils::ExecuteCommand('hostname 2>/dev/null');
+      chomp($hostnameFromCmd);
+      Utils::Trim($hostnameFromCmd);
+
+      if ($hostnameFromCmd ne $hostnameFromFile) {
+         Utils::ExecuteCommand("hostname $hostnameFromFile");
+
+         my $hostname = Utils::ExecuteCommand('hostname 2>/dev/null');
+         INFO("After reset, the hostname is $hostname");
+      }
+   } else {
+      WARN("Hostname file '$hostnameFile' not found.");
    }
 }
 

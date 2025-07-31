@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 ################################################################################
-#  Copyright (c) 2010-2024 Broadcom. All Rights Reserved.
+#  Copyright (c) 2010-2025 Broadcom. All Rights Reserved.
 #  Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
 #  and/or its subsidiaries.
 ################################################################################
@@ -16,6 +16,8 @@ use Debug;
 our $RHEL6 = "Red Hat Enterprise Linux 6";
 our $CENTOS6 = "Cent OS 6.X";
 our $OLINUX6 = "Oracle Linux 6.X";
+
+my $NETWORKSCRIPTSPATH = "/etc/sysconfig/network-scripts";
 
 sub DetectDistro
 {
@@ -51,10 +53,15 @@ sub CustomizeNetwork
 sub RemoveOldIFCfgFiles
 {
    my ($self) = @_;
-   # If there is an ifcfg-ethX file with NM_CONTROLLED=no, NM will ignore
-   # the rest of the ifcfg-ethX files and instead create "Auth ethX" profiles.
-   INFO("Removing old interface configuration files.");
-   Utils::ExecuteCommand("rm -f /etc/sysconfig/network-scripts/ifcfg-eth*");
+
+   if (-d $NETWORKSCRIPTSPATH) {
+      # If there is an ifcfg-ethX file with NM_CONTROLLED=no, NM will ignore
+      # the rest of the ifcfg-ethX files and instead create "Auth ethX"
+      # profiles.
+      INFO("Removing old interface configuration files.");
+      my $networkConfigFiles = $NETWORKSCRIPTSPATH . "/ifcfg-*";
+      Utils::DeleteFiles(glob($networkConfigFiles));
+   }
 }
 
 sub FormatIFCfgContent

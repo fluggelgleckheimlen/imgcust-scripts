@@ -1,7 +1,9 @@
 #!/usr/bin/perl
 
 ########################################################################################
-#  Copyright 2009-2020 VMware, Inc.  All rights reserved.
+#  Copyright (c) 2009-2025 Broadcom. All Rights Reserved.
+#  Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
+#  and/or its subsidiaries.
 ########################################################################################
 
 package SLES11Customization;
@@ -136,9 +138,9 @@ sub EnablePostCustomizeGuestService
    Utils::ExecuteCommand("insserv post-customize-guest");
 }
 
-#...............................................................................
+#..............................................................................
 # See Customization.pm#RestartNetwork
-#...............................................................................
+#..............................................................................
 
 sub RestartNetwork
 {
@@ -146,6 +148,21 @@ sub RestartNetwork
 
    Utils::ExecuteCommand('nscd --shutdown');
    Utils::ExecuteCommand('/etc/init.d/network restart 2>&1');
+}
+
+#..............................................................................
+# Bring up the customized Nics for the instant clone flavor of
+# guest customization. If the content of the hostname file does not match
+# the output value of the hostname command, set hostname to the content of
+# the hostname file accordingly.
+#..............................................................................
+
+sub InstantCloneNicsUp
+{
+   my ($self) = @_;
+
+   $self->SUPER::InstantCloneNicsUp();
+   $self->SetTransientHostname($SuSECustomization::SUSEHOSTNAMEFILE);
 }
 
 1;

@@ -1,58 +1,148 @@
 #!/usr/bin/perl
 
 ###############################################################################
-# Copyright (c) 2022-2025 Broadcom. All Rights Reserved.
+# Copyright (c) 2025 Broadcom. All Rights Reserved.
 # Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
 # and/or its subsidiaries.
 ###############################################################################
 
-package RHEL9Customization;
-use base qw(RHEL7Customization);
+package SLES16Customization;
+use base qw(SLES12Customization);
 
 use strict;
 use Debug;
 
-# NetworkManager stores new network profiles in keyfile format in
-# the /etc/NetworkManager/system-connections directory
+our $OSRELEASEFILE = "/etc/os-release";
+our $SLES16HOSTNAMEFILE = "/etc/hostname";
+# NetworkManager releated
 my $NMKEYFILEPROFILEDIR = "/etc/NetworkManager/system-connections";
 my $NMKEYFILEPROFILEEXT = ".nmconnection";
 my $NMKEYFILEPROFILEPREFIX = "VMware-customization-";
 my $NMKEYFILEPROFILEUSERORIGIN = "VMware customization";
 
-sub FindOsId
+sub DetectDistro
 {
-   my ($self, $content) = @_;
+   my ($self) = @_;
+
+   return $self->DetectDistroFlavour();
+}
+
+sub DetectDistroFlavour
+{
+   my ($self) = @_;
    my $result = undef;
 
-   if ($content =~ /Red.*Hat.*Enterprise.*Linux.*\s+(\d{1,2})/i) {
-      if ($1 >= 9) {
-         $result = "Red Hat Enterprise Linux $1";
+   if (-e $Customization::ISSUEFILE) {
+      DEBUG("Reading issue file ... ");
+      my $issueContent = Utils::ExecuteCommand("cat $Customization::ISSUEFILE");
+      if ($issueContent =~ /suse.*enterprise.*(server|desktop).*\s+(\d+)/i) {
+         if ($2 >= 16) {
+            $result = "Suse Linux Enterprise $1 $2";
+         }
       }
-   } elsif ($content =~ /CentOS.*?release\s+(\d{1,2})/i) {
-      if ($1 >= 9) {
-         $result = $RHEL7Customization::CENTOS . " $1";
-      }
-   } elsif ($content =~ /Oracle.*?release\s+(\d{1,2})/i) {
-      if ($1 >= 9) {
-         $result = $RHEL7Customization::ORA . " $1";
-      }
-   } elsif ($content =~ /Rocky.*?release\s+(\d{1,2})/i) {
-      # Match Rocky Linux 9.x
-      if ($1 >= 9) {
-         $result = $RHEL7Customization::ROCKY . " $1";
-      }
-   } elsif ($content =~ /Alma.*?release\s+(\d{1,2})/i) {
-      # Match Alma Linux 9.x
-      if ($1 >= 9) {
-         $result = $RHEL7Customization::ALMA . " $1";
-      }
-   } elsif ($content =~ /MIRACLE.*?release\s+(\d{1,2})/i) {
-      # Match Miracle Linux 9.x
-      if ($1 >= 9) {
-         $result = $RHEL7Customization::MIRACLE . " $1";
+   } else {
+      WARN("Issue file is not available. Ignoring it.");
+   }
+
+   if (! defined $result) {
+      if (-e $OSRELEASEFILE) {
+         DEBUG("Reading $OSRELEASEFILE file ... ");
+         my $osReleaseContent = Utils::GetValueFromFile($OSRELEASEFILE,
+            'PRETTY_NAME[\s\t]*=(.*)');
+         if ($osReleaseContent =~ /suse.*enterprise.*(server|desktop).*\s+(\d+)/i) {
+            if ($2 >= 16) {
+               $result = "Suse Linux Enterprise $1 $2";
+            }
+         }
       }
    }
+
    return $result;
+}
+
+sub InitOldHostname
+{
+   my ($self) = @_;
+
+   $self->{_oldHostName} = Utils::GetValueFromFile($SLES16HOSTNAMEFILE,
+                                                   '^(?!\s*#)(.+)');
+   chomp($self->{_oldHostName});
+   Utils::Trim($self->{_oldHostName});
+
+   INFO("OLD HOST NAME = $self->{_oldHostName}");
+}
+
+sub CustomizeHostName
+{
+   my ($self) = @_;
+   my $changeHostFQDN = 0;
+
+   my $newHostName   = $self->{_customizationConfig}->GetHostName();
+   my $newDomainName = $self->{_customizationConfig}->GetDomainName();
+
+   if (ConfigFile::IsKeepCurrentValue($newHostName)) {
+      $newHostName = Utils::GetShortnameFromFQDN($self->OldHostName());
+   } else {
+      $changeHostFQDN = 1;
+   }
+   if (ConfigFile::IsKeepCurrentValue($newDomainName)) {
+      $newDomainName = Utils::GetDomainnameFromFQDN($self->OldHostName());
+   } else {
+      $changeHostFQDN = 1;
+      if (ConfigFile::IsRemoveCurrentValue($newDomainName)) {
+         $newDomainName = '';
+      }
+   }
+
+   if ($changeHostFQDN) {
+      if (! $newHostName) {
+         die 'Cannot customize domain name only because the current hostname ' .
+             'is invalid.';
+      }
+
+      my $newFQDN = $newHostName;
+      if ($newDomainName) {
+         $newFQDN .= ".$newDomainName";
+      }
+
+      Utils::WriteBufferToFile($SLES16HOSTNAMEFILE, ["$newFQDN\n"]);
+      Utils::SetPermission($SLES16HOSTNAMEFILE, $Utils::RWRR);
+
+      Utils::ExecuteCommand("hostname $newHostName");
+   }
+}
+
+#...............................................................................
+#
+# CustomizeNICS
+#
+#   Customize network interface. This is specific to SLES 16+ which customizes
+#   NICS only.
+#
+# Params & Result:
+#   None
+#
+# NOTE:
+#...............................................................................
+
+sub CustomizeNICS
+{
+   my ($self) = @_;
+
+   # get information on the NICS to configure
+   my $nicsToConfigure =
+      $self->{_customizationConfig}->Lookup("NIC-CONFIG|NICS");
+
+   # split the string by ","
+   my @nics = split(/,/, $nicsToConfigure);
+
+   INFO("Customizing NICS. { $nicsToConfigure }");
+
+   # iterate through each NIC
+   foreach my $nic (@nics) {
+      INFO("Customizing NIC $nic");
+      $self->CustomizeSpecificNIC($nic);
+   }
 }
 
 sub CustomizeNetwork
@@ -69,7 +159,10 @@ sub CustomizeNetwork
 # RemoveOldNMKeyfileProfiles
 #
 #   Delete old NetworkManager keyfile profiles under directory
-#   /etc/NetworkManager/system-connections
+#   /etc/NetworkManager/system-connections except lo.nmconnection.
+#   lo.nmconnection is under /etc/NetworkManager/system-connnections by default,
+#   keep it to preserve the user's loopback interface settings after guest
+#   customization.
 #
 # Params:
 #   None.
@@ -84,11 +177,12 @@ sub RemoveOldNMKeyfileProfiles
    my ($self) = @_;
    # NetworkManager loads files under directory
    # /etc/NetworkManager/system-connections regardless of filename.
-   INFO("Removing old NetworkManager network profiles in keyfile format");
+   INFO("Removing old NetworkManager profiles except lo.nmconnection");
    my $keyfileProfilePattern = $NMKEYFILEPROFILEDIR . "/*";
-   Utils::DeleteFiles(glob($keyfileProfilePattern));
+   my @filesToBeDeleted = glob($keyfileProfilePattern);
+   @filesToBeDeleted = grep { $_ !~ /.*\/lo\.nmconnection$/ } @filesToBeDeleted;
+   Utils::DeleteFiles(@filesToBeDeleted);
 }
-
 
 #...............................................................................
 #
@@ -133,8 +227,8 @@ sub CustomizeSpecificNIC
 {
    my ($self, $nic) = @_;
 
-   # Write network configuration only to NetworkManager keyfile profile
-   # ifcfg-rh profile is deprecated
+   # Write network configuration to NetworkManager keyfile profile
+   # wicked has been removed
    $self->WriteNMKeyfileProfile($nic);
 }
 
@@ -193,7 +287,6 @@ sub FormatNMKeyfileProfileContent
 
    my @content;
 
-   # PR 3439507, spread ipv4 and ipv6 name servers on corresponding ip section
    my (@ipv4NameServers, @ipv6NameServers);
    my $nameServers = $self->{_customizationConfig}->GetNameServers();
    if ($nameServers && @$nameServers) {
@@ -297,6 +390,11 @@ sub FormatNMKeyfileProfileContent
       $ipv6Method = "manual";
    } else {
       $ipv6Method = "auto";
+      if ($dnsfromdhcp =~ /yes/i) {
+         push(@content, "ignore-auto-dns=false\n");
+      } elsif ($dnsfromdhcp =~ /no/i) {
+         push(@content, "ignore-auto-dns=true\n");
+      }
    }
    push(@content, "method=$ipv6Method\n");
    # [ipv6] Gateway
@@ -393,18 +491,56 @@ sub GetIpv6Addresses
    return @result;
 }
 
+#...............................................................................
+#
+# CustomizeDNS
+#
+#  DNS Setting is in NetworkManager profile, skip wicked DNS setting
+#
+#...............................................................................
+
+sub CustomizeDNS
+{
+}
+
+#...............................................................................
+#
+# GetSystemUTC
+#
+#     Get the current hardware clock based on the system setting.
+#
+# Result:
+#     Returns
+#         UTC, if hardware clock set to UTC
+#         LOCAL, if hardware clock set to LOCAL
+#         undef, if fails to get hardware clock
+#
+# NOTE: /etc/adjtime could be unavailable after setting hardware clock
+#...............................................................................
+
+sub GetSystemUTC
+{
+   my $result = undef;
+   my $timedatectlPath = Utils::GetTimedatectlPath();
+   if (defined $timedatectlPath) {
+      my $timedatectlStatus = Utils::ExecuteCommand("$timedatectlPath status");
+      if ($timedatectlStatus =~ /RTC.*in.*local.*TZ:\s+no/i) {
+         $result = 'UTC';
+      } elsif ($timedatectlStatus =~ /RTC.*in.*local.*TZ:\s+yes/i) {
+         $result = 'LOCAL';
+      }
+   }
+   return $result;
+}
+
+#..............................................................................
+# See Customization.pm#RestartNetwork
+#..............................................................................
+
 sub RestartNetwork
 {
    my ($self)  = @_;
    my $returnCode;
-
-   # Deactivate all interfaces managed by NetworkManager
-   Utils::ExecuteCommand('nmcli networking off 2>&1',
-                         'Deactivate all interfaces',
-                         \$returnCode);
-   if ($returnCode) {
-      die "Failed to deactivate interfaces, return code: $returnCode";
-   }
 
    # Reload connection profiles from disk
    Utils::ExecuteCommand('nmcli con reload',
@@ -414,10 +550,32 @@ sub RestartNetwork
       die "Failed to reload connection profiles, return code: $returnCode";
    }
 
+   # Move networking off after connection reload since off will move the
+   # devices from NetworkManager's management, it's more reasonable to reload
+   # the profiles when the devices were managed by NetworkManager.
+
+   # Deactivate all interfaces managed by NetworkManager
+   $returnCode =
+      Utils::ExecuteCommandWithRetryOnFail('nmcli networking off 2>&1',
+                                           'Deactivate all interfaces',
+                                           1, # timeout error
+                                           3, # interval 3s
+                                           4  # retry 4 times
+                                           );
+
+   if ($returnCode) {
+      die "Failed to deactivate interfaces, return code: $returnCode";
+   }
+
    # Activate all interfaces managed by NetworkManager
-   Utils::ExecuteCommand('nmcli networking on 2>&1',
-                         'Activate all interfaces',
-                         \$returnCode);
+   $returnCode =
+      Utils::ExecuteCommandWithRetryOnFail('nmcli networking on 2>&1',
+                                           'Activate all interfaces',
+                                           1, # timeout error
+                                           3, # interval 3s
+                                           4  # retry 4 times
+                                           );
+
    if ($returnCode) {
       die "Failed to activate interfaces, return code: $returnCode";
    }
@@ -429,6 +587,21 @@ sub RestartNetwork
    if ($returnCode) {
       die "Failed to restart NetworkManager.service, return code: $returnCode";
    }
+}
+
+#..............................................................................
+# Bring up the customized Nics for the instant clone flavor of
+# guest customization. If the content of the hostname file does not match
+# the output value of the hostname command, set hostname to the content of
+# the hostname file accordingly.
+#..............................................................................
+
+sub InstantCloneNicsUp
+{
+   my ($self) = @_;
+
+   $self->SUPER::InstantCloneNicsUp();
+   $self->SetTransientHostname($SLES16HOSTNAMEFILE);
 }
 
 1;

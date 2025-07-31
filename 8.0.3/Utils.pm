@@ -1,8 +1,9 @@
 #!/usr/bin/perl
 
 ################################################################################
-# Copyright (c) 2014-2021,2023-2024 Broadcom.  All rights reserved.
-# The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
+# Copyright (c) 2014-2025 Broadcom.  All rights reserved.
+# Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
+# and/or its subsidiaries.
 ################################################################################
 
 #...............................................................................
@@ -1069,8 +1070,11 @@ sub ExecuteCommand
 #   Executes a command with given timeout.
 #
 # Params:
-#   $command  - command to be executed
+#   $command  - command to be executed in child process
 #   $timeout  - timeout in seconds
+#   $commandReturnCode  - a ref to a scalar where the return code of command
+#                         executed in child process may be stored. When timeout
+#                         happenes, this scalar value will not be changed.
 #
 # Result:
 #   Stdout of the command OR "undef" if the command timed out or some execution
@@ -1080,7 +1084,7 @@ sub ExecuteCommand
 
 sub ExecuteTimedCommand
 {
-   my ($command, $timeout) = @_;
+   my ($command, $timeout, $commandReturnCode) = @_;
 
    DEBUG("TimedCommand: '$command' with timeout of $timeout sec");
 
@@ -1104,13 +1108,19 @@ sub ExecuteTimedCommand
         # seconds
         alarm $timeout;
         waitpid($pid, 0);
+        my $childPidReturnCode = $?;
+        my $childPidExitCode = $childPidReturnCode >> 8;
+        DEBUG("Command Process Exit Code: $childPidExitCode");
+        if ($commandReturnCode) {
+           $$commandReturnCode = $childPidReturnCode;
+        }
         # reset alarm, especially if exit early
         alarm 0;
         $timedOut = 0;
      };
    } elsif ($pid == 0){ # child
      setpgrp(0,0);
-     exec("$command > $tmpFilePath");
+     exec("$command > $tmpFilePath") or die "Exec failed";
      exit(0);
    }
 

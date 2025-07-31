@@ -1,7 +1,9 @@
 #!/usr/bin/perl
 
 ########################################################################################
-#  Copyright 2008-2021 VMware, Inc.  All rights reserved.
+#  Copyright (c) 2008-2025 Broadcom. All Rights Reserved.
+#  Broadcom Confidential. The term "Broadcom" refers to Broadcom Inc.
+#  and/or its subsidiaries.
 ########################################################################################
 
 package SuSECustomization;
@@ -26,7 +28,7 @@ my $SUSE                   = "SuSE Linux Distribution";
 my $SUSE_SLES              = "SuSE SLES";
 my $SUSE_GENERIC           = "SuSE";
 
-my $SUSEHOSTNAMEFILE       = "/etc/HOSTNAME";
+our $SUSEHOSTNAMEFILE       = "/etc/HOSTNAME";
 
 sub DetectDistro
 {
