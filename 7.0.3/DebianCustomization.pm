@@ -122,7 +122,6 @@ sub CustomizeHostName
       # Reconfigure SSH
       Utils::ExecuteCommand("rm -rf /etc/ssh/ssh_host_*");
       Utils::ExecuteCommand("ssh-keygen -q -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa");
-      Utils::ExecuteCommand("ssh-keygen -q -f /etc/ssh/ssh_host_ecdsa_key -N '' -t dsa");
       Utils::ExecuteCommand("ssh-keygen -q -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519");
    }
 };
